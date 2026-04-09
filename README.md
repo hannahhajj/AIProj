@@ -1,1 +1,1 @@
-# AIProj
+# AI4chem
