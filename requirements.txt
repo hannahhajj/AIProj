@@ -5,3 +5,19 @@ seaborn
 jupyterlab
 scikit-learn
 plotly
+scipy
+joblib
+ipywidgets
+
+# Chemistry / molecular tooling
+rdkit
+mordredcommunity
+pubchempy
+selfies
+
+# ML / model interpretation
+xgboost
+lightgbm
+catboost
+umap-learn
+shap
