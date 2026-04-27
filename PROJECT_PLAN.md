@@ -312,8 +312,8 @@ For each pairwise class comparison (Disease vs Control, Disease vs Benign, Benig
 - **Data**: filtered, normalised, batch-corrected feature matrix (biological samples only)
 - **Target**: class label (3 classes: Disease, Benign, Control)
 - **Split**: stratified train/test split (75% / 25%), preserving class proportions and batch representation
-- **Cross-validation**: stratified 5-fold CV on the training set for all model selection and hyperparameter tuning
-- **Metrics**: macro-averaged F1 score (primary), balanced accuracy, per-class AUC-ROC, confusion matrix
+- **Cross-validation**: stratified 5-fold CV on the training set
+- **Metrics**: macro-averaged F1 score (primary), balanced accuracy, per-class AUC-ROC
 
 #### 4.2 Models
 
@@ -321,39 +321,31 @@ For each pairwise class comparison (Disease vs Control, Disease vs Benign, Benig
 |-------|---------|-------|
 | Logistic Regression (L2) | scikit-learn | Baseline linear model; interpretable coefficients |
 | Random Forest | scikit-learn | Ensemble of decision trees; built-in feature importance |
-| Support Vector Machine (RBF kernel) | scikit-learn | Strong baseline for high-dimensional data |
-| XGBoost | xgboost | Gradient boosting; strong performance on tabular data |
-| LightGBM | lightgbm | Faster gradient boosting; handles missing values natively |
 
 #### 4.3 Hyperparameter Tuning
 
-- Use `GridSearchCV` (scikit-learn) for Logistic Regression and SVM
-- Use `Optuna` or `RandomizedSearchCV` for Random Forest, XGBoost, LightGBM
+- Use `GridSearchCV` (scikit-learn) for both models
 - Tune on training set only (5-fold CV); no access to test set during tuning
 
 Key hyperparameters to tune:
 - Logistic Regression: regularisation strength C
 - Random Forest: n_estimators, max_depth, min_samples_split
-- XGBoost/LightGBM: learning_rate, n_estimators, max_depth, subsample, colsample_bytree
 
-#### 4.4 Feature Selection Integration
+#### 4.4 Feature Importance
 
-- **Recursive Feature Elimination with CV (RFECV)** using Random Forest as estimator
-- Identify the minimum feature subset achieving near-optimal performance
-- Refit all models on selected feature subset
-- Compare performance: full feature set vs. reduced feature set
+- Use Random Forest feature importances (mean decrease in impurity) to rank features
+- Cross-reference top features with Phase 3 statistical results (VIP scores, volcano plot hits)
+- This provides a consistent, interpretable ranking without the computational overhead of wrapper methods
 
 #### 4.5 Model Evaluation
 
 For each model, on the held-out test set:
 
-- Confusion matrix (absolute counts + normalised)
 - Per-class precision, recall, F1
 - Macro-averaged AUC-ROC (one-vs-rest)
 - ROC curve plot per class
-- Precision-recall curve (useful for imbalanced classes)
 
-Summary comparison table across all models.
+Compare the two models in text; summary results reported in the key results table.
 
 #### 4.6 Model Interpretability — SHAP Analysis
 
@@ -361,21 +353,13 @@ Apply SHAP (SHapley Additive exPlanations) to the best-performing model:
 
 - **Summary plot (beeswarm)**: feature importance ranked by mean |SHAP value|, each dot = one sample
 - **Bar plot**: mean absolute SHAP values per feature (global importance)
-- **Dependence plots**: for the top 5 features, plot SHAP value vs. feature intensity (coloured by a potential interaction feature)
-- **Force plots**: individual sample explanations for correctly and incorrectly classified samples
 - Map top SHAP features back to m/z and RT values from `feature_metadata.csv`
-
-#### 4.7 Learning Curves
-
-For the best model:
-- Plot training and CV validation score vs. training set size
-- Assess: is the model underfitting (need more features/complexity) or overfitting (need more data/regularisation)?
 
 ---
 
 ### Phase 5: Glycan Embedding & Biological Interpretation
 
-**Goal:** Use the `glycowork` library to enrich identified glycans with structural and biological context, build a glycan embedding space, and interpret the molecular biology underlying the biomarker candidates.
+**Goal:** Use the `glycowork` library to enrich identified glycans with structural and biological context, generate a glycan embedding space, and interpret the molecular biology underlying the biomarker candidates.
 
 #### 5.1 Glycan Sequence Loading & Annotation
 
@@ -393,56 +377,30 @@ Using the `glycowork` library:
 **Disease Association Enrichment**
 - Cross-reference glycan sequences against `df_glycan.pkl` (reference database of ~50,500 glycans with disease labels)
 - Identify which identified glycans have known associations with lung cancer, other cancers, or inflammatory diseases
-- Chi-square enrichment test: are disease-associated glycans overrepresented in the lung cancer patient group vs. controls?
+- Use glycowork's built-in enrichment functions to test whether disease-associated glycans are overrepresented among the biomarker candidates
 
 **Protein Binding Enrichment**
 - Cross-reference against `glycan_binding.pkl` (>790,000 protein–glycan interactions)
 - Identify which glycan-binding proteins interact with the top biomarker glycans
-- Pathway enrichment: map interacting proteins to biological pathways (GO terms, KEGG)
-- Are the proteins biologically relevant to lung cancer (e.g., lectins, selectins, immune receptors)?
+- Use glycowork to map interacting proteins to biological context (lectins, selectins, immune receptors)
+- Assess biological relevance to lung cancer
 
 **Species & Tissue Distribution**
 - Cross-reference against `df_species.pkl`
 - Identify whether top biomarker glycans are known to be expressed preferentially in lung tissue or tumour-associated tissues
 
-#### 5.3 Glycan Embedding Construction
+#### 5.3 Glycan Embedding via glycowork
 
-Build a multi-modal embedding space that captures four types of information:
-
-| Embedding Component | Method | Source |
-|---------------------|--------|--------|
-| Sequence similarity | Edit distance on IUPAC strings → MDS embedding | glycan_list.csv |
-| Monosaccharide composition | Direct numeric vector (dHex, Hex, HexNAc, Neu5Ac counts) | glycan_list.csv |
-| Disease association | Binary vector of disease labels | df_glycan.pkl |
-| Protein interaction profile | Bag-of-proteins binary vector | glycan_binding.pkl |
-
-- Concatenate or learn a joint embedding via late fusion
-- Apply UMAP to the combined feature matrix to produce a 2D visualisation
+- Use glycowork's built-in embedding tools to generate feature vectors for the identified glycans
+- Apply UMAP to the resulting feature matrix to produce a 2D visualisation
 - Colour points by: monosaccharide composition, disease association, tissue type, sialic acid content
+- For the top biomarker glycans, examine their nearest neighbours in the embedding space and assess whether they share disease associations or structural features
 
 #### 5.4 Embedding Quality Assessment
 
 - **N-glycan benchmark**: load `N_glycans_df.pkl` — known N-glycan sequences
 - Check that N-glycans cluster together in the embedding space (they share structural features)
-- Compute: silhouette score for N-glycan cluster vs. background
-- Nearest-neighbour analysis: for the top biomarker glycans, who are their nearest neighbours in embedding space? Do they share disease associations?
-
-#### 5.5 Machine Learning on Embeddings
-
-Train classifiers on the embedding vectors to predict glycan properties:
-
-- **Binary tasks**:
-  - Cancer-associated (yes/no)
-  - Tissue type (lung vs. other)
-  - Sialylated (Neu5Ac > 0 vs. 0)
-
-- **Models**:
-  - Logistic Regression (linear baseline on embedding features)
-  - Random Forest
-  - Multi-Layer Perceptron (MLP, 2–3 hidden layers, ReLU activation)
-
-- **Evaluation**: 5-fold stratified CV, AUC-ROC, F1
-- **Comparison**: simple embedding (composition only) vs. full multi-modal embedding
+- Nearest-neighbour analysis: do the top biomarker glycans cluster with other disease-associated glycans?
 
 ---
 
@@ -462,12 +420,10 @@ Train classifiers on the embedding vectors to predict glycan properties:
 | Fig 6 | PCA + UMAP of cleaned data coloured by class | Phase 3 |
 | Fig 7 | Volcano plots (3 pairwise comparisons) | Phase 3 |
 | Fig 8 | Top features heatmap (samples × features) | Phase 3 |
-| Fig 9 | Model comparison bar chart (F1 / AUC) | Phase 4 |
-| Fig 10 | Confusion matrix of best model | Phase 4 |
-| Fig 11 | SHAP beeswarm + dependence plots | Phase 4 |
-| Fig 12 | Glycan embedding UMAP | Phase 5 |
-| Fig 13 | Disease/protein enrichment plot | Phase 5 |
-| Fig 14 | Embedding ML performance comparison | Phase 5 |
+| Fig 9 | SHAP beeswarm | Phase 4 |
+| Fig 10 | Glycan embedding UMAP | Phase 5 |
+
+Model comparison results, classification metrics, enrichment findings, and embedding neighbourhood analysis are reported in text and the results summary table rather than as standalone figures.
 
 #### 6.2 Key Results Summary Table
 
@@ -497,9 +453,8 @@ Train classifiers on the embedding vectors to predict glycan properties:
 | `numpy` | 2.2.1 | Numerical operations |
 | `scipy` | 1.14.1 | Statistical tests (ANOVA, Kruskal-Wallis, Shapiro-Wilk) |
 | `statsmodels` | 0.14.4 | Multiple testing correction (BH FDR), PLS-DA |
-| `scikit-learn` | 1.6.0 | PCA, UMAP preprocessing, all ML classifiers, RFECV, metrics |
-| `xgboost` | latest | Gradient boosting classification |
-| `lightgbm` | latest | Fast gradient boosting |
+| `scikit-learn` | 1.6.0 | PCA, UMAP preprocessing, ML classifiers, metrics |
+| `xgboost` | latest | Gradient boosting (available for supplementary comparison if time allows) |
 | `shap` | latest | Model interpretability (SHAP values) |
 | `umap-learn` | latest | Non-linear dimensionality reduction |
 | `matplotlib` | 3.10.0 | Core plotting |
@@ -519,7 +474,7 @@ By the end of this project, we expect to produce:
 
 2. **A ranked list of glycan biomarker candidates** — features statistically significant across multiple tests (ANOVA, volcano plot, PLS-DA VIP, SHAP), with m/z and RT annotations
 
-3. **A validated multi-class classifier** — achieving macro AUC > 0.85 across 5-fold CV, distinguishing lung cancer from benign disease and healthy controls
+3. **A comparative ML classification analysis** — Logistic Regression and Random Forest evaluated via 5-fold stratified CV, with results interpreted in terms of model behaviour, feature consistency, and separation between disease states rather than against a fixed benchmark
 
 4. **SHAP-based molecular interpretations** — connecting model predictions to specific glycan features and their biological roles
 
@@ -535,13 +490,11 @@ By the end of this project, we expect to produce:
 
 | Week | Phase | Key Deliverables |
 |------|-------|-----------------|
-| Week 1, Days 1–2 | Phase 1: EDA | Data loading complete; 8 EDA question plots generated; isomers, isotopes, standards, contamination assessed |
-| Week 1, Days 3–4 | Phase 2: QC & Filtering | Filtered data matrix; normalisation applied; batch correction assessed; data ready for analysis |
-| Week 1, Day 5 | Phase 3a: Unsupervised | PCA and UMAP plots; hierarchical clustering heatmap |
-| Week 2, Days 1–2 | Phase 3b: Statistical testing | Volcano plots; significant feature list; effect sizes |
-| Week 2, Days 3–4 | Phase 4: ML Classification | All 5 models trained; SHAP analysis; learning curves |
-| Week 2, Day 5 | Phase 5: Glycan Embedding | Enrichment analysis; embedding UMAP; embedding ML results |
-| Final day | Phase 6: Write-up | All figures finalised; summary table; interpretation narrative |
+| Week 1 | Phase 1: EDA | Data loading complete; feature map, CV/D-Ratio, standards, contamination, and batch effect plots generated; isomer and isotope detection done |
+| Week 2 | Phase 2: QC & Filtering | Filtered data matrix; missingness imputed; log2 + PQN normalisation applied; ComBat batch correction assessed; analysis-ready dataset saved |
+| Week 3 | Phase 3: Statistical & Unsupervised Analysis | PCA and UMAP of cleaned data; hierarchical clustering; Kruskal-Wallis + FDR correction; volcano plots for all pairwise comparisons; candidate feature list finalised |
+| Week 4 | Phase 4: ML Classification | Logistic Regression and Random Forest trained and evaluated; 5-fold CV results; feature importance ranking; SHAP beeswarm analysis |
+| Week 5 | Phase 5: Glycan Embedding + Write-up | glycowork embedding and UMAP; disease and protein enrichment analysis; 4-page paper drafted; presentation slides prepared |
 
 ---
 
