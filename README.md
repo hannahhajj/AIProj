@@ -167,13 +167,13 @@ In this part, we are very interested in your approach in setting up a machine le
 
 ## Environment Setup
 
-We use uv for package management - a modern, fast Python package installer and resolver. 
+Use the `requirements.txt` file to install all dependencies with any package manager of your choice. For example, with conda:
 
-The project.toml file in the repository specifies all required dependencies, ensuring everyone works with the same environment. 
-
-The lock file contains the exact versions of the dependencies that were installed. After cloning the repository, simply run `uv sync` and uv will handle the rest, creating a clean, isolated environment for your work. More on uv can be found in the ressources section.
-
-Alternatively, you can use the requirements.txt file to install the dependencies with any package manager of your choice.
+```bash
+conda create -n ai4chem python=3.11
+conda activate ai4chem
+pip install -r requirements.txt
+```
 The provided packages are not exhaustive, you are free to use any other package you deem necessary for your work.
 
 ### Project Organization
@@ -198,4 +198,3 @@ The provided packages are not exhaustive, you are free to use any other package 
 - [Coefficient of Variation](https://pmc.ncbi.nlm.nih.gov/articles/PMC3695475/)
 - [Glaycan Analysis](https://www.mdpi.com/2218-273X/13/4/605)
 - [Glycowork](https://github.com/BojarLab/glycowork)
-- [UV package manager](https://docs.astral.sh/uv/guides/projects/)
